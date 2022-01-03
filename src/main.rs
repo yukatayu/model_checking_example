@@ -1,6 +1,7 @@
 use std::{collections::HashMap, collections::HashSet};
 use itertools::iproduct;
 
+// 検査対象のプログラムを表現するための構造体たち
 enum MemoryAddressElement {
     Pid,
     Opid,
@@ -31,6 +32,27 @@ enum Statement{
     GotoIfStat(GotoIf)
 }
 
+// 検査する式を表現するための構造体たち
+type ProgramStatus = (Vec<i32>, Vec<bool>);  // プログラムをどこまで実行したか， 状態
+struct KripkeStructure {
+    param_map: HashMap<(&'static str, Option<bool>), i32>,
+    param_count: i32,
+    status_list: Vec<(Vec<i32>, Vec<bool>)>,
+    transition: HashMap<(Vec<i32>, Vec<bool>), HashSet<(Vec<i32>, Vec<bool>)>>,
+    rev_transition: HashMap<(Vec<i32>, Vec<bool>), HashSet<(Vec<i32>, Vec<bool>)>>,
+}
+
+struct Proposition {
+    Address: (&'static str, Option<bool>)
+}
+enum SyntaxTree {
+    Literal(Proposition),
+    And((Box<SyntaxTree>,Box<SyntaxTree>)),
+    Or((Box<SyntaxTree>,Box<SyntaxTree>)),
+    Not(Box<SyntaxTree>),
+    AG(Box<SyntaxTree>),
+}
+
 fn main() {
     use MemoryAddressElement::{Pid, Opid};
     use ImmediateValue::Val;
@@ -55,21 +77,141 @@ fn main() {
         SetValueStat( SetValue{ target: ("b", Some(Pid)),  value: Val(false) } ),
     ];
 
+    let initial_set =
+        vec![(vec![0, 0], vec![false, false, false, false, false])]
+        .into_iter().collect::<HashSet<_>>();
     let label_list = vec![("b",true), ("turn", false), ("c", true)];
-    // generate_relation_for_pair_processes(&program1, &label_list);
-
     
-    let program3 = vec![
-        SetValueStat( SetValue{ target: ("c", None),  value: ImmediateValue::Val(true) } ),
-        GotoIfStat  ( GotoIf  { target: ("c", None),  value: ImmediateValue::Pid, goto_then: 0, goto_else: 1 } ),
-    ];
-    let label_list_3 = vec![("c", false)];
-    generate_relation_for_pair_processes(&program3, &label_list_3);
+    // A G not(c[0] and c[1]) を検査したい
+    let is_sound = SyntaxTree::AG(
+        Box::new(SyntaxTree::Not(
+            Box::new(SyntaxTree::And((
+                Box::new(SyntaxTree::Literal(
+                    Proposition{Address: ("c", Some(false))}
+                )),
+                Box::new(SyntaxTree::Literal(
+                    Proposition{Address: ("c", Some(true))}
+                ))
+            ))
+        ))
+    ));
 
-    // A G not(c[0], c[1])
+    print!("検査対象: ");
+    print_formula(&is_sound);
+    println!("");
+    
+    for (program, program_name) in vec![(program1, "ダメなバージョン"), (program2, "大丈夫なバージョン")] {
+        println!("[{}]", program_name);
+        let kripke_structure = kripke_structure_for_pair_processes(&program, &label_list);
+        let sat_set =  sat_set_of(&kripke_structure, &is_sound);
+        let counter_example = &initial_set - &sat_set;
+        if counter_example.is_empty() {
+            println!("  OK!")
+        } else {
+            println!("  error!\n  {:?}", counter_example);
+        }
+    }
 }
 
-fn generate_relation_for_pair_processes(program: &Vec<Statement>, label_list: &Vec<(&'static str, bool)>) {
+fn print_formula(formula: &SyntaxTree) {
+    match &formula {
+        SyntaxTree::Literal(prop) => {
+            let (name, index) = prop.Address;
+            if let Some(x) = index {
+                print!("{}[{}]", name, if x{1}else{0})
+            } else {
+                print!("{}", name)
+            }
+        },
+        SyntaxTree::And((y,x)) => {
+            print!("(");
+            print_formula(&*y);
+            print!(" ∧ ");
+            print_formula(&*x);
+            print!(")");
+        },
+        SyntaxTree::Or((y,x)) => {
+            print!("(");
+            print_formula(&*y);
+            print!(" ∨ ");
+            print_formula(&*x);
+            print!(")");
+        },
+        SyntaxTree::Not(x) => {
+            print!("￢");
+            print_formula(&*x);
+        },
+        &SyntaxTree::AG(x) => {
+            print!("AG ");
+            print_formula(&*x);
+        }
+    }
+}
+
+fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashSet<ProgramStatus> {
+    match &formula {
+        SyntaxTree::Literal(prop) => {
+            let param_pos = *kripke_structure.param_map.get(&prop.Address).unwrap();
+            kripke_structure.status_list
+                .iter()
+                .cloned()
+                .filter(|program_status|{
+                    let (_, status) = program_status;
+                    *status.get(param_pos as usize).unwrap()
+                })
+                .collect::<HashSet<_>>()
+        },
+        SyntaxTree::And((y,x)) => {
+            let lhs = sat_set_of(kripke_structure, &*y);
+            let rhs = sat_set_of(kripke_structure, &*x);
+            &lhs & &rhs
+        },
+        SyntaxTree::Or((y,x)) => {
+            let lhs = sat_set_of(kripke_structure, &*y);
+            let rhs = sat_set_of(kripke_structure, &*x);
+            &lhs | &rhs
+        },
+        SyntaxTree::Not(x) => {
+            let rhs = sat_set_of(kripke_structure, &*x);
+            let all = kripke_structure.status_list.iter().cloned().collect::<HashSet<_>>();
+            &all - &rhs
+        },
+        &SyntaxTree::AG(x) => {
+            let rhs = sat_set_of(kripke_structure, &*x);
+            let mut visited: HashSet<ProgramStatus> = HashSet::new();
+            
+            let mut ag = |status: &ProgramStatus| -> bool {
+                let mut bfs_candidate: HashSet<ProgramStatus> = HashSet::new();
+                bfs_candidate.insert(status.clone());
+                while !bfs_candidate.is_empty() {
+                    let top = bfs_candidate.iter().cloned().nth(0).unwrap();
+                    if rhs.get(&top) == None {
+                        return false;
+                    }
+                    if let Some(trans) = kripke_structure.transition.get(&top) {
+                        for status in trans.iter() {
+                            if visited.get(status) == None {
+                                bfs_candidate.insert(status.clone());
+                                visited.insert(status.clone());
+                            }
+                        }
+                    }
+                    bfs_candidate.remove(&top);
+                }
+                return true;
+            };
+
+            kripke_structure.status_list
+                .iter()
+                .cloned()
+                .filter(|program_status|{ ag(program_status) })
+                .collect::<HashSet<_>>()
+        },
+    }
+
+}
+
+fn kripke_structure_for_pair_processes(program: &Vec<Statement>, label_list: &Vec<(&'static str, bool)>) -> KripkeStructure {
     // パラメータの列挙
     let (param_map, param_count) =
     {
@@ -88,8 +230,7 @@ fn generate_relation_for_pair_processes(program: &Vec<Statement>, label_list: &V
     };
 
     // 全状態の列挙
-    type Status = (Vec<i32>, Vec<bool>);  // プログラムをどこまで実行したか， 状態
-    fn generate_all_status(target: &mut Vec<Status>, proc_status: &Vec<i32>, depth_left: i32, current_vec: Vec<bool>) {
+    fn generate_all_status(target: &mut Vec<ProgramStatus>, proc_status: &Vec<i32>, depth_left: i32, current_vec: Vec<bool>) {
         if depth_left <= 0 {
             let new_proc_status = proc_status.clone();
             target.push((new_proc_status, current_vec));
@@ -102,14 +243,15 @@ fn generate_relation_for_pair_processes(program: &Vec<Statement>, label_list: &V
         };
     }
 
-    let mut status_list: Vec<Status> = Vec::new();
+    let mut status_list: Vec<ProgramStatus> = Vec::new();
     for (proc1, proc2) in iproduct!(0..(program.len()+1) as i32, 0..(program.len()+1) as i32) {
         let proc_status = vec![proc1, proc2];
         generate_all_status(&mut status_list, &proc_status, param_count, vec![]);
     }
 
     // グラフの構築
-    let mut transition_list: HashMap<Status, HashSet<Status>> = HashMap::new();
+    let mut transition: HashMap<ProgramStatus, HashSet<ProgramStatus>> = HashMap::new();
+    let mut rev_transition: HashMap<ProgramStatus, HashSet<ProgramStatus>> = HashMap::new();
     for pid_i in 0..2 {
         for line in 0..program.len() as i32 {
             for status in status_list.iter() {
@@ -157,28 +299,16 @@ fn generate_relation_for_pair_processes(program: &Vec<Statement>, label_list: &V
                     }
 
                     let next_status = (next_proc_status, next_param_list);
-                    transition_list.entry(status.clone()).or_insert(HashSet::new());
-                    transition_list.get_mut(status).unwrap().insert(next_status);
+
+                    transition.entry(status.clone()).or_insert(HashSet::new());
+                    transition.get_mut(status).unwrap().insert(next_status.clone());
+                    
+                    rev_transition.entry(next_status.clone()).or_insert(HashSet::new());
+                    rev_transition.get_mut(&next_status).unwrap().insert(status.clone());
                 }
             }
         }
     };
-    // println!("{:#?}", transition_list);
-    println!("{:?}", transition_list);
-    // (param_map, param_count, status_list, transition_list, )
-
-
-
-    // ([0,0],[0,0,0,0,0,0,0])
-    // ......
-    // ([7,7],[1,1,1,1,1,1,1])
-
-
-    
-    // paramList = {
-    //     ("b", 0),("b", 1),("turn",None),("c",0),("c",1),
-    // }
-    // statusList = 2^paramList * [0, |program|] * [0, |program|]
-
-    // Map<statusList , (predicate, aims_to: Vec<status> )>
+    // println!("{:?}", transition);
+    KripkeStructure {param_map, param_count, status_list, transition, rev_transition}
 }
