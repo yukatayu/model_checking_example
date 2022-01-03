@@ -96,19 +96,24 @@ fn main() {
         ))
     ));
 
-    print!("検査対象: ");
-    print_formula(&is_sound);
-    println!("");
-    
+    let check_formulae = vec![is_sound];
     for (program, program_name) in vec![(program1, "ダメなバージョン"), (program2, "大丈夫なバージョン")] {
+        println!("");
         println!("[{}]", program_name);
+        println!("----------");
+        print_program(&program);
+        println!("----------");
+        
         let kripke_structure = kripke_structure_for_pair_processes(&program, &label_list);
-        let sat_set =  sat_set_of(&kripke_structure, &is_sound);
-        let counter_example = &initial_set - &sat_set;
-        if counter_example.is_empty() {
-            println!("  OK!")
-        } else {
-            println!("  error!\n  {:?}", counter_example);
+        for formula in check_formulae.iter() {
+            let sat_set =  sat_set_of(&kripke_structure, &formula);
+            let counter_example = &initial_set - &sat_set;
+            print!("  "); print_formula(formula);
+            if counter_example.is_empty() {
+                println!(": OK!")
+            } else {
+                println!(": Error!\n  {:?}", counter_example);
+            }
         }
     }
 }
@@ -146,6 +151,56 @@ fn print_formula(formula: &SyntaxTree) {
             print_formula(&*x);
         }
     }
+}
+
+fn print_program(program: &Vec<Statement>) {
+    fn print_variable_name(target: &MemoryAddress) {
+        let (name, index) = &target;
+        print!("{}", name);
+        if let Some(x) = index {
+            let index_str = match x {
+                MemoryAddressElement::Pid => "pid",
+                MemoryAddressElement::Opid => "1 - pid",
+            };
+            print!("[{}]", index_str);
+        }
+    }
+    fn print_immediate_value(value: &ImmediateValue){
+        let value = match value {
+            ImmediateValue::Pid => { "pid" },
+            ImmediateValue::Opid => { "1 - pid" },
+            ImmediateValue::Val(b) => { if *b {"true"} else {"false"} },
+        };
+        print!("{}", value);
+    }
+    for (line, statement) in program.iter().enumerate() {
+        print!("{} | ", line);
+        match statement {
+            Statement::SetValueStat(s) => {
+                print_variable_name(&s.target);
+                print!(" = ");
+                print_immediate_value(&s.value);
+                println!("")
+            },
+            Statement::GotoIfStat(s) => {
+                print!("if (");
+                print_variable_name(&s.target);
+                print!(" = ");
+                print_immediate_value(&s.value);
+                println!(") goto {} else goto {}", s.goto_then, s.goto_else);
+            },
+        }
+    }
+    /*
+    let program2 = vec![
+        SetValueStat( SetValue{ target: ("b", Some(Pid)),  value: ImmediateValue::Val(true) } ),
+        SetValueStat( SetValue{ target: ("turn", None),    value: ImmediateValue::Opid } ),
+        GotoIfStat  ( GotoIf  { target: ("b", Some(Opid)), value: Val(true),            goto_then: 3, goto_else: 4 } ),
+        GotoIfStat  ( GotoIf  { target: ("turn", None),    value: ImmediateValue::Opid, goto_then: 2, goto_else: 4 } ),
+        SetValueStat( SetValue{ target: ("c", Some(Pid)),  value: Val(true)  } ),
+        SetValueStat( SetValue{ target: ("c", Some(Pid)),  value: Val(false) } ),
+        SetValueStat( SetValue{ target: ("b", Some(Pid)),  value: Val(false) } ),
+     */
 }
 
 fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashSet<ProgramStatus> {
