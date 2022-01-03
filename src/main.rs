@@ -97,7 +97,7 @@ fn main() {
     ));
 
     let check_formulae = vec![is_sound];
-    for (program, program_name) in vec![(program1, "ダメなバージョン"), (program2, "大丈夫なバージョン")] {
+    for (program, program_name) in vec![(program1, "A"), (program2, "B")] {
         println!("");
         println!("[{}]", program_name);
         println!("----------");
@@ -110,9 +110,9 @@ fn main() {
             let counter_example = &initial_set - &sat_set;
             print!("  "); print_formula(formula);
             if counter_example.is_empty() {
-                println!(": OK!")
+                println!(" : OK!")
             } else {
-                println!(": Error!\n    → {:?}", counter_example);
+                println!(" : Error!\n    → {:?}", counter_example);
             }
         }
     }
@@ -147,9 +147,10 @@ fn print_formula(formula: &SyntaxTree) {
             print_formula(&*x);
         },
         &SyntaxTree::AG(x) => {
-            print!("AG ");
+            print!("\u{2200}\u{25a1} ");  // AG, 
             print_formula(&*x);
         }
+        // TODO: F → \u{25c7}, N → \u{25cb}
     }
 }
 
