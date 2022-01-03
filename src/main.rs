@@ -112,7 +112,7 @@ fn main() {
             if counter_example.is_empty() {
                 println!(": OK!")
             } else {
-                println!(": Error!\n  {:?}", counter_example);
+                println!(": Error!\n    → {:?}", counter_example);
             }
         }
     }
@@ -131,19 +131,19 @@ fn print_formula(formula: &SyntaxTree) {
         SyntaxTree::And((y,x)) => {
             print!("(");
             print_formula(&*y);
-            print!(" ∧ ");
+            print!(" \u{2227} ");  // ∨
             print_formula(&*x);
             print!(")");
         },
         SyntaxTree::Or((y,x)) => {
             print!("(");
             print_formula(&*y);
-            print!(" ∨ ");
+            print!(" \u{2228} ");  // ∧
             print_formula(&*x);
             print!(")");
         },
         SyntaxTree::Not(x) => {
-            print!("￢");
+            print!("\u{ffe2}");  // ￢
             print_formula(&*x);
         },
         &SyntaxTree::AG(x) => {
@@ -160,7 +160,7 @@ fn print_program(program: &Vec<Statement>) {
         if let Some(x) = index {
             let index_str = match x {
                 MemoryAddressElement::Pid => "pid",
-                MemoryAddressElement::Opid => "1 - pid",
+                MemoryAddressElement::Opid => "1-pid",
             };
             print!("[{}]", index_str);
         }
@@ -168,7 +168,7 @@ fn print_program(program: &Vec<Statement>) {
     fn print_immediate_value(value: &ImmediateValue){
         let value = match value {
             ImmediateValue::Pid => { "pid" },
-            ImmediateValue::Opid => { "1 - pid" },
+            ImmediateValue::Opid => { "1-pid" },
             ImmediateValue::Val(b) => { if *b {"true"} else {"false"} },
         };
         print!("{}", value);
@@ -183,24 +183,14 @@ fn print_program(program: &Vec<Statement>) {
                 println!("")
             },
             Statement::GotoIfStat(s) => {
-                print!("if (");
+                print!("if(");
                 print_variable_name(&s.target);
-                print!(" = ");
+                print!(" == ");
                 print_immediate_value(&s.value);
-                println!(") goto {} else goto {}", s.goto_then, s.goto_else);
+                println!("){{ goto {} }}else{{ goto {} }}", s.goto_then, s.goto_else);
             },
         }
     }
-    /*
-    let program2 = vec![
-        SetValueStat( SetValue{ target: ("b", Some(Pid)),  value: ImmediateValue::Val(true) } ),
-        SetValueStat( SetValue{ target: ("turn", None),    value: ImmediateValue::Opid } ),
-        GotoIfStat  ( GotoIf  { target: ("b", Some(Opid)), value: Val(true),            goto_then: 3, goto_else: 4 } ),
-        GotoIfStat  ( GotoIf  { target: ("turn", None),    value: ImmediateValue::Opid, goto_then: 2, goto_else: 4 } ),
-        SetValueStat( SetValue{ target: ("c", Some(Pid)),  value: Val(true)  } ),
-        SetValueStat( SetValue{ target: ("c", Some(Pid)),  value: Val(false) } ),
-        SetValueStat( SetValue{ target: ("b", Some(Pid)),  value: Val(false) } ),
-     */
 }
 
 fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashSet<ProgramStatus> {
