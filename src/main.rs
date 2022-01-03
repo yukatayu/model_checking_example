@@ -224,10 +224,10 @@ fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashS
         },
         &SyntaxTree::AG(x) => {
             let rhs = sat_set_of(kripke_structure, &*x);
-            let mut visited: HashSet<ProgramStatus> = HashSet::new();
             
             let mut ag = |status: &ProgramStatus| -> bool {
                 let mut bfs_candidate: HashSet<ProgramStatus> = HashSet::new();
+                let mut visited: HashSet<ProgramStatus> = HashSet::new();
                 bfs_candidate.insert(status.clone());
                 while !bfs_candidate.is_empty() {
                     let top = bfs_candidate.iter().cloned().nth(0).unwrap();
