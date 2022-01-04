@@ -1,4 +1,5 @@
 use std::{collections::HashMap, collections::HashSet};
+use itertools::Itertools;
 use itertools::iproduct;
 
 // 検査対象のプログラムを表現するための構造体たち
@@ -225,7 +226,7 @@ fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashS
         &SyntaxTree::AG(x) => {
             let rhs = sat_set_of(kripke_structure, &*x);
             
-            let mut ag = |status: &ProgramStatus| -> bool {
+            let ag = |status: &ProgramStatus| -> bool {
                 let mut bfs_candidate: HashSet<ProgramStatus> = HashSet::new();
                 let mut visited: HashSet<ProgramStatus> = HashSet::new();
                 bfs_candidate.insert(status.clone());
@@ -276,23 +277,22 @@ fn kripke_structure_for_pair_processes(program: &Vec<Statement>, label_list: &Ve
     };
 
     // 全状態の列挙
-    fn generate_all_status(target: &mut Vec<ProgramStatus>, proc_status: &Vec<i32>, depth_left: i32, current_vec: Vec<bool>) {
-        if depth_left <= 0 {
-            let new_proc_status = proc_status.clone();
-            target.push((new_proc_status, current_vec));
-        } else {
-            let mut new_vec    = current_vec.clone(); new_vec.push(false);
-            generate_all_status(target, proc_status, depth_left - 1, new_vec);
-
-            let mut new_vec    = current_vec.clone(); new_vec.push(true);
-            generate_all_status(target, proc_status, depth_left - 1, new_vec);
-        };
-    }
-
     let mut status_list: Vec<ProgramStatus> = Vec::new();
     for (proc1, proc2) in iproduct!(0..(program.len()+1) as i32, 0..(program.len()+1) as i32) {
         let proc_status = vec![proc1, proc2];
-        generate_all_status(&mut status_list, &proc_status, param_count, vec![]);
+        status_list.append(&mut
+            std::iter::repeat(())
+                .take(param_count as usize)
+                .map(|_| (0..=1))
+                .multi_cartesian_product()
+                .into_iter()
+                .map(|state|
+                    (proc_status.clone(),
+                    state.into_iter()
+                        .map(|val| val!=0)
+                        .collect::<Vec<_>>()))
+                .collect::<Vec<_>>()
+        );
     }
 
     // グラフの構築
