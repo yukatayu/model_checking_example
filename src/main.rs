@@ -44,7 +44,7 @@ struct KripkeStructure {
 }
 
 struct Proposition {
-    Address: (&'static str, Option<bool>),
+    address: (&'static str, Option<bool>),
 }
 enum SyntaxTree {
     Literal(Proposition),
@@ -136,10 +136,10 @@ fn main() {
     // A G not(c[0] and c[1]) を検査したい
     let is_sound = SyntaxTree::AG(Box::new(SyntaxTree::Not(Box::new(SyntaxTree::And((
         Box::new(SyntaxTree::Literal(Proposition {
-            Address: ("c", Some(false)),
+            address: ("c", Some(false)),
         })),
         Box::new(SyntaxTree::Literal(Proposition {
-            Address: ("c", Some(true)),
+            address: ("c", Some(true)),
         })),
     ))))));
 
@@ -169,7 +169,7 @@ fn main() {
 fn print_formula(formula: &SyntaxTree) {
     match &formula {
         SyntaxTree::Literal(prop) => {
-            let (name, index) = prop.Address;
+            let (name, index) = prop.address;
             if let Some(x) = index {
                 print!("{}[{}]", name, if x { 1 } else { 0 })
             } else {
@@ -250,7 +250,7 @@ fn print_program(program: &Vec<Statement>) {
 fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashSet<ProgramStatus> {
     match &formula {
         SyntaxTree::Literal(prop) => {
-            let param_pos = *kripke_structure.param_map.get(&prop.Address).unwrap();
+            let param_pos = *kripke_structure.param_map.get(&prop.address).unwrap();
             kripke_structure
                 .status_list
                 .iter()
