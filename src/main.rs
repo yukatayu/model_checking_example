@@ -431,18 +431,12 @@ fn kripke_structure_for_pair_processes(
 
                     transition
                         .entry(status.clone())
-                        .or_insert_with(HashSet::new);
-                    transition
-                        .get_mut(status)
-                        .unwrap()
+                        .or_insert_with(HashSet::new)
                         .insert(next_status.clone());
 
                     rev_transition
                         .entry(next_status.clone())
-                        .or_insert_with(HashSet::new);
-                    rev_transition
-                        .get_mut(&next_status)
-                        .unwrap()
+                        .or_insert_with(HashSet::new)
                         .insert(status.clone());
                 }
             }
