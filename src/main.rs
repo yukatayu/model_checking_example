@@ -145,7 +145,7 @@ fn main() {
 
     let check_formulae = vec![is_sound];
     for (program, program_name) in vec![(program1, "A"), (program2, "B")] {
-        println!("");
+        println!();
         println!("[{}]", program_name);
         println!("----------");
         print_program(&program);
@@ -153,7 +153,7 @@ fn main() {
 
         let kripke_structure = kripke_structure_for_pair_processes(&program, &label_list);
         for formula in check_formulae.iter() {
-            let sat_set = sat_set_of(&kripke_structure, &formula);
+            let sat_set = sat_set_of(&kripke_structure, formula);
             let counter_example = &initial_set - &sat_set;
             print!("  ");
             print_formula(formula);
@@ -234,7 +234,7 @@ fn print_program(program: &Vec<Statement>) {
                 print_variable_name(&s.target);
                 print!(" = ");
                 print_immediate_value(&s.value);
-                println!("")
+                println!()
             }
             Statement::GotoIfStat(s) => {
                 print!("if(");
@@ -288,7 +288,7 @@ fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashS
                 let mut visited: HashSet<ProgramStatus> = HashSet::new();
                 bfs_candidate.insert(status.clone());
                 while !bfs_candidate.is_empty() {
-                    let top = bfs_candidate.iter().cloned().nth(0).unwrap();
+                    let top = bfs_candidate.iter().cloned().next().unwrap();
                     if rhs.get(&top) == None {
                         return false;
                     }
@@ -302,7 +302,7 @@ fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashS
                     }
                     bfs_candidate.remove(&top);
                 }
-                return true;
+                true
             };
 
             kripke_structure
