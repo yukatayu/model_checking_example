@@ -35,17 +35,23 @@ enum Statement {
 
 // 検査する式を表現するための構造体たち
 type ProgramStatus = (Vec<i32>, Vec<bool>); // プログラムをどこまで実行したか， 状態
+
+type TransitionMap = HashMap<(Vec<i32>, Vec<bool>), HashSet<(Vec<i32>, Vec<bool>)>>;
+
+#[allow(dead_code)]
 struct KripkeStructure {
     param_map: HashMap<(&'static str, Option<bool>), i32>,
     param_count: i32,
     status_list: Vec<(Vec<i32>, Vec<bool>)>,
-    transition: HashMap<(Vec<i32>, Vec<bool>), HashSet<(Vec<i32>, Vec<bool>)>>,
-    rev_transition: HashMap<(Vec<i32>, Vec<bool>), HashSet<(Vec<i32>, Vec<bool>)>>,
+    transition: TransitionMap,
+    rev_transition: TransitionMap,
 }
 
 struct Proposition {
     address: (&'static str, Option<bool>),
 }
+
+#[allow(dead_code)]
 enum SyntaxTree {
     Literal(Proposition),
     And((Box<SyntaxTree>, Box<SyntaxTree>)),
@@ -201,7 +207,7 @@ fn print_formula(formula: &SyntaxTree) {
     }
 }
 
-fn print_program(program: &Vec<Statement>) {
+fn print_program(program: &[Statement]) {
     fn print_variable_name(target: &MemoryAddress) {
         let (name, index) = &target;
         print!("{}", name);
@@ -316,8 +322,8 @@ fn sat_set_of(kripke_structure: &KripkeStructure, formula: &SyntaxTree) -> HashS
 }
 
 fn kripke_structure_for_pair_processes(
-    program: &Vec<Statement>,
-    label_list: &Vec<(&'static str, bool)>,
+    program: &[Statement],
+    label_list: &[(&'static str, bool)],
 ) -> KripkeStructure {
     // パラメータの列挙
     let (param_map, param_count) = {
@@ -423,7 +429,9 @@ fn kripke_structure_for_pair_processes(
 
                     let next_status = (next_proc_status, next_param_list);
 
-                    transition.entry(status.clone()).or_insert(HashSet::new());
+                    transition
+                        .entry(status.clone())
+                        .or_insert_with(HashSet::new);
                     transition
                         .get_mut(status)
                         .unwrap()
@@ -431,7 +439,7 @@ fn kripke_structure_for_pair_processes(
 
                     rev_transition
                         .entry(next_status.clone())
-                        .or_insert(HashSet::new());
+                        .or_insert_with(HashSet::new);
                     rev_transition
                         .get_mut(&next_status)
                         .unwrap()
