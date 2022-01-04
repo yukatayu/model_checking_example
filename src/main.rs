@@ -1,5 +1,7 @@
+use indoc::indoc;
 use itertools::iproduct;
 use itertools::Itertools;
+use std::fmt::Formatter;
 use std::{collections::HashMap, collections::HashSet};
 
 // 検査対象のプログラムを表現するための構造体たち
@@ -8,13 +10,59 @@ enum MemoryAddressElement {
     Opid,
 }
 
+impl std::fmt::Display for MemoryAddressElement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                MemoryAddressElement::Pid => "pid".to_string(),
+                MemoryAddressElement::Opid => "1-pid".to_string(),
+            }
+        )
+    }
+}
+
 enum ImmediateValue {
     Pid,
     Opid,
     Val(bool),
 }
 
-type MemoryAddress = (&'static str, Option<MemoryAddressElement>);
+impl std::fmt::Display for ImmediateValue {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                ImmediateValue::Pid => "pid".to_string(),
+                ImmediateValue::Opid => "1-pid".to_string(),
+                ImmediateValue::Val(b) => b.to_string(),
+            }
+        )
+    }
+}
+
+struct MemoryAddress(&'static str, Option<MemoryAddressElement>);
+
+impl From<(&'static str, Option<MemoryAddressElement>)> for MemoryAddress {
+    fn from(pair: (&'static str, Option<MemoryAddressElement>)) -> Self {
+        MemoryAddress(pair.0, pair.1)
+    }
+}
+
+impl std::fmt::Display for MemoryAddress {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}{}",
+            self.0,
+            self.1
+                .as_ref()
+                .map_or_else(|| "".to_string(), |index| format!("{}", index))
+        )
+    }
+}
 
 struct SetValue {
     target: MemoryAddress,
@@ -31,6 +79,26 @@ struct GotoIf {
 enum Statement {
     SetValueStat(SetValue),
     GotoIfStat(GotoIf),
+}
+
+impl std::fmt::Display for Statement {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                Statement::SetValueStat(s) => {
+                    format!("{} = {}", &s.target, &s.value)
+                }
+                Statement::GotoIfStat(s) => {
+                    format!(
+                        "if({} = {}){{ goto {} }}else{{ goto {} }}",
+                        &s.target, &s.value, s.goto_then, s.goto_else
+                    )
+                }
+            }
+        )
+    }
 }
 
 // 検査する式を表現するための構造体たち
@@ -60,76 +128,106 @@ enum SyntaxTree {
     AG(Box<SyntaxTree>),
 }
 
+impl std::fmt::Display for SyntaxTree {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            match self {
+                SyntaxTree::Literal(prop) => {
+                    let (name, index) = prop.address;
+                    index.as_ref().map_or_else(
+                        || format!("{}", name),
+                        |x| format!("{}[{}]", name, *x as i32),
+                    )
+                }
+                SyntaxTree::And((y, x)) => {
+                    format!("({} \u{2227} {}", &*y, &*x)
+                }
+                SyntaxTree::Or((y, x)) => {
+                    format!("({} \u{2228} {}", &*y, &*x)
+                }
+                SyntaxTree::Not(x) => {
+                    format!("\u{ffe2}{}", &*x) // ￢
+                }
+                SyntaxTree::AG(x) => {
+                    format!("\u{2200}\u{25a1} {}", &*x) // AG,
+                } // TODO: F → \u{25c7}, N → \u{25cb}
+            }
+        )
+    }
+}
+
 fn main() {
     use ImmediateValue::Val;
     use MemoryAddressElement::{Opid, Pid};
     use Statement::{GotoIfStat, SetValueStat};
     let program1 = vec![
         SetValueStat(SetValue {
-            target: ("b", Some(Pid)),
+            target: ("b", Some(Pid)).into(),
             value: ImmediateValue::Val(true),
         }),
         GotoIfStat(GotoIf {
-            target: ("turn", None),
+            target: ("turn", None).into(),
             value: ImmediateValue::Pid,
             goto_then: 2,
             goto_else: 4,
         }),
         GotoIfStat(GotoIf {
-            target: ("b", Some(Opid)),
+            target: ("b", Some(Opid)).into(),
             value: Val(true),
             goto_then: 2,
             goto_else: 3,
         }),
         SetValueStat(SetValue {
-            target: ("turn", None),
+            target: ("turn", None).into(),
             value: ImmediateValue::Pid,
         }),
         SetValueStat(SetValue {
-            target: ("c", Some(Pid)),
+            target: ("c", Some(Pid)).into(),
             value: Val(true),
         }),
         SetValueStat(SetValue {
-            target: ("c", Some(Pid)),
+            target: ("c", Some(Pid)).into(),
             value: Val(false),
         }),
         SetValueStat(SetValue {
-            target: ("b", Some(Pid)),
+            target: ("b", Some(Pid)).into(),
             value: Val(false),
         }),
     ];
 
     let program2 = vec![
         SetValueStat(SetValue {
-            target: ("b", Some(Pid)),
+            target: ("b", Some(Pid)).into(),
             value: ImmediateValue::Val(true),
         }),
         SetValueStat(SetValue {
-            target: ("turn", None),
+            target: ("turn", None).into(),
             value: ImmediateValue::Opid,
         }),
         GotoIfStat(GotoIf {
-            target: ("b", Some(Opid)),
+            target: ("b", Some(Opid)).into(),
             value: Val(true),
             goto_then: 3,
             goto_else: 4,
         }),
         GotoIfStat(GotoIf {
-            target: ("turn", None),
+            target: ("turn", None).into(),
             value: ImmediateValue::Opid,
             goto_then: 2,
             goto_else: 4,
         }),
         SetValueStat(SetValue {
-            target: ("c", Some(Pid)),
+            target: ("c", Some(Pid)).into(),
             value: Val(true),
         }),
         SetValueStat(SetValue {
-            target: ("c", Some(Pid)),
+            target: ("c", Some(Pid)).into(),
             value: Val(false),
         }),
         SetValueStat(SetValue {
-            target: ("b", Some(Pid)),
+            target: ("b", Some(Pid)).into(),
             value: Val(false),
         }),
     ];
@@ -151,103 +249,31 @@ fn main() {
 
     let check_formulae = vec![is_sound];
     for (program, program_name) in vec![(program1, "A"), (program2, "B")] {
-        println!();
-        println!("[{}]", program_name);
-        println!("----------");
-        print_program(&program);
-        println!("----------");
+        println!(
+            indoc! {r#"
+
+            [{name}]
+            ----------
+            {program}
+            ----------
+        "#},
+            name = program_name,
+            program = program
+                .iter()
+                .enumerate()
+                .map(|(line, stmt)| format!("{} | {}", line, stmt))
+                .join("\n")
+        );
 
         let kripke_structure = kripke_structure_for_pair_processes(&program, &label_list);
         for formula in check_formulae.iter() {
             let sat_set = sat_set_of(&kripke_structure, formula);
             let counter_example = &initial_set - &sat_set;
-            print!("  ");
-            print_formula(formula);
+            print!("  {}", formula);
             if counter_example.is_empty() {
                 println!(" : OK!")
             } else {
                 println!(" : Error!\n    → {:?}", counter_example);
-            }
-        }
-    }
-}
-
-fn print_formula(formula: &SyntaxTree) {
-    match &formula {
-        SyntaxTree::Literal(prop) => {
-            let (name, index) = prop.address;
-            if let Some(x) = index {
-                print!("{}[{}]", name, if x { 1 } else { 0 })
-            } else {
-                print!("{}", name)
-            }
-        }
-        SyntaxTree::And((y, x)) => {
-            print!("(");
-            print_formula(&*y);
-            print!(" \u{2227} "); // ∨
-            print_formula(&*x);
-            print!(")");
-        }
-        SyntaxTree::Or((y, x)) => {
-            print!("(");
-            print_formula(&*y);
-            print!(" \u{2228} "); // ∧
-            print_formula(&*x);
-            print!(")");
-        }
-        SyntaxTree::Not(x) => {
-            print!("\u{ffe2}"); // ￢
-            print_formula(&*x);
-        }
-        &SyntaxTree::AG(x) => {
-            print!("\u{2200}\u{25a1} "); // AG,
-            print_formula(&*x);
-        } // TODO: F → \u{25c7}, N → \u{25cb}
-    }
-}
-
-fn print_program(program: &[Statement]) {
-    fn print_variable_name(target: &MemoryAddress) {
-        let (name, index) = &target;
-        print!("{}", name);
-        if let Some(x) = index {
-            let index_str = match x {
-                MemoryAddressElement::Pid => "pid",
-                MemoryAddressElement::Opid => "1-pid",
-            };
-            print!("[{}]", index_str);
-        }
-    }
-    fn print_immediate_value(value: &ImmediateValue) {
-        let value = match value {
-            ImmediateValue::Pid => "pid",
-            ImmediateValue::Opid => "1-pid",
-            ImmediateValue::Val(b) => {
-                if *b {
-                    "true"
-                } else {
-                    "false"
-                }
-            }
-        };
-        print!("{}", value);
-    }
-    for (line, statement) in program.iter().enumerate() {
-        print!("{} | ", line);
-        match statement {
-            Statement::SetValueStat(s) => {
-                print_variable_name(&s.target);
-                print!(" = ");
-                print_immediate_value(&s.value);
-                println!()
-            }
-            Statement::GotoIfStat(s) => {
-                print!("if(");
-                print_variable_name(&s.target);
-                print!(" == ");
-                print_immediate_value(&s.value);
-                println!("){{ goto {} }}else{{ goto {} }}", s.goto_then, s.goto_else);
             }
         }
     }
