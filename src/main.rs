@@ -169,7 +169,7 @@ fn main() {
         }),
         GotoIfStat(GotoIf {
             target: ("turn", None).into(),
-            value: ImmediateValue::Pid,
+            value: ImmediateValue::Opid,
             goto_then: 2,
             goto_else: 4,
         }),
